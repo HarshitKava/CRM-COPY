@@ -1,6 +1,3 @@
-from msilib.schema import Font
-from operator import index
-from tokenize import group
 from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.contrib.auth import authenticate, login, logout
@@ -10,12 +7,14 @@ from django.contrib.auth.models import Group
 from .models import *
 from ProductivityReport.models import *
 from .forms import *#SiteEngDayForm,UpdateForm,CreateUserForm,Area_Input,AddCont,Add_Labour,Add_Lab_To_Contractor,ResetPasswordForm
+from ProductivityReport.forms import *
 from datetime import date
 from .decorators import allowed_users, unauthenticated_user
 from openpyxl import Workbook
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.styles import Font,Alignment
 from datetime import datetime, timedelta
+import pandas as pd
 
 def Navbar(request):
     return render(request,'LabourReport/Navbar.html')
@@ -96,7 +95,7 @@ def ViewDaySE(request):
     tomorrow = today + timedelta(1)
     d2=tomorrow.strftime("%Y-%m-%d")
     d1 = today.strftime("%Y-%m-%d")
-    print("d",d1,d2)
+    print("d",d1,d2,type(d1))
     Report=SiteEngDay.objects.filter(Areaname=Areaname_id)
     return render(request,'LabourReport/SiteEngViewDayData.html',{'Report':Report,'Areaname':Areaname,'Areaname_id':Areaname_id})
     print("Areaname",Areaname)
@@ -152,13 +151,217 @@ def DeleteNightSE(request,i):
     new=SiteEngNight.objects.get(id=i)
     new.delete()
     return redirect('/AddNightSE/')
-    
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Site Engineer'])
+def DLRSummary(request):
+    if request.method=='POST':
+        # print(request.POST)
+        query_dict = request.POST.dict()
+        print(query_dict.keys())
+        if 'Show' in query_dict.keys():
+            # Get data from SiteEngDay table
+            current_user = request.user
+            Areaname = Area.objects.filter(Username=current_user.username)
+            d1 = query_dict['From']
+            d2 = query_dict['To']
+            print(query_dict['Shift'])
+            if query_dict['Shift']=='Day':
+                data = SiteEngDay.objects.filter(created_at__range=[d1,d2],Areaname=Areaname[0].id).order_by('ContractorName')
+            else:
+                data = SiteEngNight.objects.filter(created_at__range=[d1,d2],Areaname=Areaname[0].id).order_by('ContractorName')
+            df = pd.DataFrame(columns=['ContractorName','Date','LabourCategory','CategoryName','NoLabor'])
+            for i in data:
+                # print all data
+                date = str(i.created_at)[:10]
+                date = date[8:10]+"/"+date[5:7]+"/"+date[0:4]
+                df = df.append({'ContractorName':i.ContractorName,'Date':date,'LabourCategory':i.LabourCategory,'CategoryName':i.CategoryName,'NoLabor':i.NoLabor},ignore_index=True)
+            # Get unique ContractorName from df
+            cont_name = df['ContractorName'].unique()
+            cont_row_span = {}
+            for i in cont_name:
+                cont_row_span[i] = len(df[df['ContractorName']==i])
+            return render(request,'LabourReport/DLR_Summary.html',{'df':df,'from':d1,'to':d2,'Shift':query_dict['Shift'],'cont_row_span':cont_row_span})
+        elif 'Export' in query_dict.keys():
+            current_user = request.user
+            Areaname = Area.objects.filter(Username=current_user.username)
+            d1 = query_dict['From']
+            d2 = query_dict['To']
+            print(query_dict['Shift'])
+            if query_dict['Shift']=='Day':
+                data = SiteEngDay.objects.filter(created_at__range=[d1,d2],Areaname=Areaname[0].id).order_by('ContractorName')
+            else:
+                data = SiteEngNight.objects.filter(created_at__range=[d1,d2],Areaname=Areaname[0].id).order_by('ContractorName')
+            df = pd.DataFrame(columns=['ContractorName','Date','LabourCategory','CategoryName','NoLabor'])
+            for i in data:
+                # print all data
+                date = str(i.created_at)[:10]
+                date = date[8:10]+"/"+date[5:7]+"/"+date[0:4]
+                print(date)
+                df = df.append({'ContractorName':i.ContractorName,'Date':date,'LabourCategory':i.LabourCategory,'CategoryName':i.CategoryName,'NoLabor':i.NoLabor},ignore_index=True)
+            # Create Workbook and add worksheet
+            workbook = Workbook()
+            # Get active worksheet/tab
+            response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            filename="DLR "+d1+" to "+d2+" "+query_dict['Shift']+".xlsx"
+            response['Content-Disposition'] = 'attachment; filename='+filename
+            worksheet = workbook.active
+            worksheet.title = 'DLR Summary'
+
+            # Define the titles for columns
+            columns = [
+                'ContractorName',
+                'Date',
+                'LabourCategory',
+                'CategoryName',
+                'NoLabor',
+            ]
+
+            # Assign the titles for each cell of the header
+            for col_num, column_title in enumerate(columns, 1):
+                cell = worksheet.cell(row=1, column=col_num)
+                cell.value = column_title
+            
+            # Bold the header
+            for cell in worksheet["1:1"]:
+                cell.font = Font(bold=True)
+            row_num = 2
+            # Append data in sheet
+            for i in range(0,len(df)):
+                # print(df.iloc[i])
+                print(df.iloc[i]['ContractorName'])
+                # Reverse the date format
+                date = str(df.iloc[i]['Date'])
+                row = [
+                    str(df.iloc[i]['ContractorName']),
+                    date,
+                    str(df.iloc[i]['LabourCategory']),
+                    str(df.iloc[i]['CategoryName']),
+                    df.iloc[i]['NoLabor'],
+                ]
+                print(row)
+                for col_num, cell_value in enumerate(row, 1):
+                    cell = worksheet.cell(row=row_num, column=col_num)
+                    cell.value = cell_value
+                row_num += 1
+            # Save the file
+            for col in worksheet.columns:
+                max_length = 0
+                column = col[0].column_letter # Get the column name
+                for cell in col:
+                    try: # Necessary to avoid error on empty cells
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = max_length+3
+                worksheet.column_dimensions[column].width = adjusted_width
+            workbook.save(response)
+            return response
+
+    return render(request,'LabourReport/DLR_Summary.html')
 
 @login_required(login_url='Login')
 @allowed_users(allowed_roles=['Admin'])
 def HomeAdmin(request):
-    return render(request,'LabourReport/Admin/HomeAd.html')
+    # Get Data of users
+    User_data=User.objects.all().order_by('username')
+    User_data=User.objects.all().order_by('username')
+    df = pd.DataFrame(columns=['username','email','group'])
+    for i in User_data:
+        df = df.append({'id':i.id,'username':i.username,'email':i.email,'group':i.groups.all()[0]},ignore_index=True)
 
+    # Get Data of Areas
+    Area_data=Area.objects.all().order_by('AreaName')
+    # Convert to Dataframe
+    df1=pd.DataFrame(Area_data.values())
+    df1 = df1[['AreaName','Username']]
+    # Merge Dataframes
+    df2 = pd.merge(df,df1,how='left',left_on='username',right_on='Username')
+    # drop Username column
+    df2 = df2.drop(['Username'],axis=1)
+    return render(request,'LabourReport/Admin/HomeAd.html',{'data':df2})
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def EditUser(request,i):
+    # Get Data of users
+    i = float(i)
+    User_data=User.objects.get(pk=i)
+    Area_data=Area.objects.get(Username=User_data.username)
+    registration_form=CreateUserForm(request.POST or None,instance=User_data)
+    Area_input=Area_Input(request.POST or None,instance=Area_data)
+    print("*************",registration_form.is_valid())
+    if registration_form.is_valid() and Area_input.is_valid():
+        registration_form.save()
+        Area_input.save()
+        print(1)
+        return redirect('HomeAdmin')
+    return render(request,'LabourReport/Admin/EditUser.html',{'form1':registration_form,'form2':Area_input})
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def DeleteUser(request,i):
+    i = float(i)
+    User_data=User.objects.get(pk=i)
+    User_data.delete()
+    return redirect('HomeAdmin')
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def ShowContractor(request):
+    data = ContractorDetail.objects.all().order_by('ContractorName')
+    df = pd.DataFrame(columns=['ContractorName','ContractorNumber','id'])
+    for i in data:
+        df = df.append({'ContractorName':i.ContractorName,'ContractorNumber':i.ContractorNumber,'id':i.id},ignore_index=True)
+    return render(request,'LabourReport/Admin/ShowContractor.html',{'data':df})
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def EditContractor(request,i):
+    i = float(i)
+    data = ContractorDetail.objects.get(pk=i)
+    form = AddCont(request.POST or None,instance=data)
+    if form.is_valid():
+        form.save()
+        return redirect('Contractor')
+    return render(request,'LabourReport/Admin/EditContractor.html',{'form':form})
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def DeleteContractor(request,i):
+    i = float(i)
+    data = ContractorDetail.objects.get(pk=i)
+    data.delete()
+    return redirect('Contractor')
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def ShowStructure(request):
+    data = Structure.objects.all().order_by('StructureName')
+    df = pd.DataFrame(columns=['StructureName','StructureNumber','id'])
+    for i in data:
+        df = df.append({'StructureName':i.StructureName,'id':i.id},ignore_index=True)
+    return render(request,'LabourReport/Admin/ShowStructure.html',{'data':df})
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def EditStructure(request,i):
+    i = float(i)
+    data = Structure.objects.get(pk=i)
+    form = StructureForm(request.POST or None,instance=data)
+    if form.is_valid():
+        form.save()
+        return redirect('ShowStructure')
+    return render(request,'LabourReport/Admin/EditStructure.html',{'Form':form})
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def DeleteStructure(request,i):
+    i = float(i)
+    data = Structure.objects.get(pk=i)
+    data.delete()
+    return redirect('ShowStructure')
 
 @login_required(login_url='Login')
 @allowed_users(allowed_roles=['Admin'])
@@ -167,11 +370,10 @@ def AddUser(request):
     Area_input=Area_Input()
     # descending order of groups in User table
     User_data=User.objects.all().order_by('username')
-
-    print(1)
     if request.method == 'POST':
         registration_form=CreateUserForm(request.POST)
         Area_input=Area_Input(request.POST)
+        
         print(2)
         print(request.POST.get('groups'))
         print(registration_form.errors)
@@ -204,35 +406,39 @@ def AddUser(request):
 @allowed_users(allowed_roles=['Admin'])
 def AddContractor(request):
     form=AddCont()
+    data = ContractorDetail.objects.all()
     if request.method == 'POST':
         form=AddCont(request.POST)
         if form.is_valid():
             form.save()
-            return redirect('HomeAdmin')
-    return render(request,'LabourReport/Admin/Contractor.html',{'form':form})
+        return render(request,'LabourReport/Admin/Contractor.html',{'form':form,'data':data})    
+    return render(request,'LabourReport/Admin/Contractor.html',{'form':form,'data':data})
 
 @login_required(login_url='Login')
 @allowed_users(allowed_roles=['Admin'])    
 def AddLabours(request):
     form=Add_Labour()
+    labour_data = AddLabour.objects.all()
     if request.method == 'POST':
         form=Add_Labour(request.POST)
         if form.is_valid():
             form.save()
-            return redirect('HomeAdmin')
-    return render(request,'LabourReport/Admin/Labour.html',{'form':form})
+            return render(request,'LabourReport/Admin/Labour.html',{'form':form,'labour_data':labour_data})
+    
+    return render(request,'LabourReport/Admin/Labour.html',{'form':form,'labour_data':labour_data})
 
 @login_required(login_url='Login')
 @allowed_users(allowed_roles=['Admin'])
 def LaboursOfContractor(request):
     form=Add_Lab_To_Contractor()
+    data = LabourOfContractor.objects.all()
     if request.method == 'POST':
         form=Add_Lab_To_Contractor(request.POST)
         
         if form.is_valid():
             form.save()
-            return redirect('HomeAdmin')
-    return render(request,'LabourReport/Admin/LabourToCont.html',{'form':form})
+            return render(request,'LabourReport/Admin/LabourToCont.html',{'form':form,'data':data})
+    return render(request,'LabourReport/Admin/LabourToCont.html',{'form':form,'data':data})
 
 @login_required(login_url='Login')
 @allowed_users(allowed_roles=['Admin'])
@@ -520,8 +726,10 @@ def SiteReport(request):
         date = request.POST.get('date')
         date1=datetime.strptime(date, "%Y-%m-%d")
         tomorrow = date1 + timedelta(1)
+        date1 = date1 - timedelta(1)
         d1=date1.strftime("%Y-%m-%d")
         d2=tomorrow.strftime("%Y-%m-%d")
+        print("d",d1,d2)
         # area = request.POST.get('area')
         # print(area)
         
@@ -567,21 +775,22 @@ def SiteReport(request):
         for i in area_arr:
             area=i
             area_id=Area.objects.filter(AreaName=area)
-            area_id=area_id[0].id
+            id_list = []
+            for i in area_id:
+                id_list.append(i.id)
+
             if shift == 'Day':
-                rows = SiteEngDay.objects.filter(Areaname=area_id,created_at__range=[d1,d2]).values_list('LabourCategory', 'NoLabor')
+                rows = SiteEngDay.objects.filter(Areaname__in=id_list,created_at__range=[d1,d2]).values_list('LabourCategory', 'NoLabor')
             elif shift == 'Night':
-                rows = SiteEngNight.objects.filter(Areaname=area_id,created_at__range=[d1,d2]).values_list('LabourCategory', 'NoLabor')
+                rows = SiteEngNight.objects.filter(Areaname__in=id_list,created_at__range=[d1,d2]).values_list('LabourCategory', 'NoLabor')
             worksheet['A1'].font = Font(bold=True)
-            print(rows)
-            
             # row_num = row_num+ 1
             for row in rows:
+                
                 LabourCategory = LabourOfContractor.objects.filter(pk=row[0]).values_list('LabourCategory')
                 LabourCategory =list(LabourCategory[0])
                 LabourCategory = AddLabour.objects.filter(pk=LabourCategory[0]).values_list('LabourCategory')
                 LabourCategory =list(LabourCategory[0])
-                print(LabourCategory[0])
                 # Define the data for each cell in the row 
                 row = [
                     LabourCategory[0],
@@ -591,9 +800,13 @@ def SiteReport(request):
                 # index of area in area_arr
                 ind=area_arr1.index(area)+1
                 if LabourCategory[0] in LabCat:
-                    print(1)
+                    print(LabCat,area)
                     row_num1=LabCat.index(LabourCategory[0])+3
-                    worksheet.cell(row=row_num1, column=ind).value = row[1]
+                    # print(int(worksheet.cell(row=row_num1, column=ind).value))
+                    if worksheet.cell(row=row_num1, column=ind).value is None:
+                        worksheet.cell(row=row_num1, column=ind).value = row[1]
+                    else:
+                        worksheet.cell(row=row_num1, column=ind).value = worksheet.cell(row=row_num1, column=ind).value + row[1]
                 else:
                     print(2)
                     worksheet.cell(row=row_num, column=ind).value = row[1]
@@ -606,7 +819,6 @@ def SiteReport(request):
                     # Total of row
                     worksheet.cell(row=row_num-1, column=25).value = '=SUM(C'+str(row_num-1)+'+E'+str(row_num-1)+'+G'+str(row_num-1)+'+I'+str(row_num-1)+'+K'+str(row_num-1)+'+M'+str(row_num-1)+'+O'+str(row_num-1)+'+Q'+str(row_num-1)+'+S'+str(row_num-1)+'+U'+str(row_num-1)+'+W'+str(row_num-1)+')'
                     worksheet.cell(row=row_num-1, column=26).value = '=SUM(D'+str(row_num-1)+'+F'+str(row_num-1)+'+H'+str(row_num-1)+'+J'+str(row_num-1)+'+L'+str(row_num-1)+'+N'+str(row_num-1)+'+P'+str(row_num-1)+'+R'+str(row_num-1)+'+T'+str(row_num-1)+'+V'+str(row_num-1)+'+X'+str(row_num-1)+')'
-        
         # Total of column
         worksheet.cell(row=row_num, column=1).value = 'Total'
         worksheet.cell(row=row_num, column=1).font = Font(bold=True)
@@ -626,7 +838,9 @@ def SiteReport(request):
         for i in area_arr:
             area=i
             area_id=Area.objects.filter(AreaName=area)
-            area_id=area_id[0].id
+            id_list = []
+            for i in area_id:
+                id_list.append(i.id)
             # Create multiple sheets using openpyxl
             worksheet = workbook.create_sheet(area)
             columns = ['Site Name','Contractor Name', 'Labour Category', 'Category of Deployment','Structure', 'Deployment']
@@ -647,9 +861,9 @@ def SiteReport(request):
             # Define the titles for columns
             
             if shift == 'Day':
-                rows = SiteEngDay.objects.filter(Areaname=area_id,created_at__range=[d1,d2]).values_list('ContractorName', 'LabourCategory','CategoryName','StructureName', 'NoLabor')
+                rows = SiteEngDay.objects.filter(Areaname__in=id_list,created_at__range=[d1,d2]).values_list('ContractorName', 'LabourCategory','CategoryName','StructureName', 'NoLabor')
             elif shift == 'Night':
-                rows = SiteEngNight.objects.filter(Areaname=area_id,created_at__range=[d1,d2]).values_list('ContractorName', 'LabourCategory','CategoryName','StructureName', 'NoLabor')
+                rows = SiteEngNight.objects.filter(Areaname__in=id_list,created_at__range=[d1,d2]).values_list('ContractorName', 'LabourCategory','CategoryName','StructureName', 'NoLabor')
             
             worksheet['A1'].font = Font(bold=True)
             for cell in worksheet["1:1"]:
@@ -669,19 +883,21 @@ def SiteReport(request):
                 StructureName = Structure.objects.filter(pk=row[3]).values_list('StructureName')
                 StructureName =list(StructureName[0])
                 row=[
-                    i,
+                    area,
                     ContName[0],
                     LabourCategory[0],
                     CategoryName[0],
                     StructureName[0],
                     row[4],
                 ]
+                print(row)
                 if row[2] not in overall_dict:
                     overall_dict[row[2]] = row[5]
                 else:
                     overall_dict[row[2]] += row[5]
                 for col_num, cell_value in enumerate(row, 1):
                     cell = worksheet.cell(row=row_num, column=col_num)
+                    print(cell_value)
                     cell.value = cell_value
             # write total formula in cell
             if len(rows)>0:
@@ -704,7 +920,7 @@ def SiteReport(request):
                             max_length = len(str(cell.value))
                     except:
                         pass
-                adjusted_width = max_length+1
+                adjusted_width = max_length+3
                 worksheet.column_dimensions[column].width = adjusted_width
         # print(row_num)
         # tabl = Table(displayName="Table1", ref="A1:F"+str(row_num))
@@ -715,7 +931,7 @@ def SiteReport(request):
 
         worksheet = workbook.create_sheet('Overall')
         overall = SiteEngDay.objects.filter(created_at__range=[d1,d2]).values_list('ContractorName', 'LabourCategory', 'NoLabor')
-        print(overall)
+        print(1,overall)
         print(overall_dict)
         row_num = 1
         columns = ['Labour Category', 'Deployment']
@@ -734,6 +950,17 @@ def SiteReport(request):
             for col_num, cell_value in enumerate(row, 1):
                 cell = worksheet.cell(row=row_num, column=col_num)
                 cell.value = cell_value
+        for col in worksheet.columns:
+                max_length = 0
+                column = col[0].column_letter # Get the column name
+                for cell in col:
+                    try: # Necessary to avoid error on empty cells
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = max_length+3
+                worksheet.column_dimensions[column].width = adjusted_width
         workbook.save(response)
         return response
 
@@ -774,317 +1001,6 @@ def FinalReport(request):
             cureent_cell.alignment = Alignment(horizontal='center', vertical='center')
             cureent_cell=worksheet.cell(row=1,column=ord('B')-64)
             cureent_cell.alignment = Alignment(horizontal='center', vertical='center')
-
-        #     col="C"
-        #     for i in area:
-        #         worksheet.column_dimensions[col].width = len('Unskilled')
-        #         worksheet.column_dimensions[chr(ord(col)+1)].width = len('Unskilled')
-        #         worksheet[col+'1']= i
-        #         cureent_cell=worksheet.cell(row=1,column=ord(col)-64)
-        #         cureent_cell.alignment = Alignment(horizontal='center')
-        #         worksheet[col+'2']= 'Skilled'
-        #         cureent_cell=worksheet.cell(row=2,column=ord(col)-64)
-        #         cureent_cell.alignment = Alignment(horizontal='center')
-        #         worksheet[chr(ord(col)+1)+'2']= 'Unskilled'
-        #         cureent_cell=worksheet.cell(row=2,column=ord(col)-64+1)
-        #         cureent_cell.alignment = Alignment(horizontal='center')
-        #         col=chr(ord(col)+2)
-        #     worksheet.merge_cells('A1:A2')
-        #     worksheet.merge_cells('B1:B2')
-        #     worksheet.merge_cells('C1:D1')
-        #     worksheet.merge_cells('E1:F1')
-        #     worksheet.merge_cells('G1:H1')
-        #     worksheet.merge_cells('I1:J1')
-        #     worksheet.merge_cells('K1:L1')
-        #     worksheet.merge_cells('M1:N1')
-        #     worksheet.merge_cells('O1:P1')
-        #     worksheet.merge_cells('Q1:R1')
-        #     worksheet.merge_cells('S1:T1')
-        #     worksheet.merge_cells('U1:V1')
-        #     worksheet.merge_cells('W1:X1')
-        #     #Bold
-        #     for cell in worksheet["1:1"]:
-        #         cell.font = Font(bold=True)
-        #     for cell in worksheet["2:2"]:
-        #         cell.font = Font(bold=True)
-        #     row_num = 3
-        #     Cont=[]
-        #     Lab=[]
-        #     for i in area:
-        #         area_id=Area.objects.filter(AreaName=i)
-        #         if area_id:
-        #             area_id=area_id[0].id
-                    
-        #             if shift == 'Day':
-        #                 rows = SiteEngDay.objects.filter(Areaname=area_id,created_at__range=[d1,d2]).values_list('ContractorName', 'LabourCategory','CategoryName','StructureName' 'NoLabor')
-        #             elif shift == 'Night':
-        #                 rows = SiteEngNight.objects.filter(Areaname=area_id,created_at__range=[d1,d2]).values_list('ContractorName', 'LabourCategory','CategoryName','StructureName' 'NoLabor')
-                    
-        #             rows=list(rows)
-        #             print(rows)
-        #             for row in rows:
-        #                 ContractorName = ContractorDetail.objects.filter(pk=row[0]).values_list('ContractorName')
-        #                 ContName=list(ContractorName[0])
-                        
-                        
-                        
-        #                 LabourCategory = LabourOfContractor.objects.filter(pk=row[1]).values_list('LabourCategory')
-        #                 LabourCategory =list(LabourCategory[0])
-        #                 LabourCategory = AddLabour.objects.filter(pk=LabourCategory[0]).values_list('LabourCategory')
-        #                 LabourCategory =list(LabourCategory[0])
-        #                 if (ContName[0] in Cont) and (LabourCategory[0] in Lab) and (Cont.index(ContName[0]) == Lab.index(LabourCategory[0])):
-        #                     index=Cont.index(ContName[0])
-        #                     ind=area.index(i)
-        #                     worksheet[chr(ord('C')+ind*2)+str(3+int(index))]=row[2]
-        #                     worksheet[chr(ord('C')+ind*2+1)+str(3+int(index))]=row[3]
-        #                 else:
-        #                     Cont.append(ContName[0])
-        #                     worksheet['A'+str(row_num)]=ContName[0]
-        #                     Lab.append(LabourCategory[0])
-        #                     worksheet['B'+str(row_num)]=LabourCategory[0]
-        #                     ind=area.index(i)
-        #                     worksheet[chr(ord('C')+ind*2)+str(row_num)]=row[2]
-        #                     worksheet[chr(ord('C')+ind*2+1)+str(row_num)]=row[3]
-        #                     row_num += 1
-        #     worksheet.freeze_panes='C3'
-        # elif reporttype == 'Final':
-        #     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        #     filename="Final Report "+date+" "+shift+".xlsx"
-        #     response['Content-Disposition'] = 'attachment; filename='+filename
-        #     worksheet = workbook.active
-        #     worksheet.title = 'Final Report'+date+' '+shift
-        #     area=["SBN","KV","DBM","RKP","MPZ","HBM","ALK","AIIMS","Casting Yard","Casting Yard QC","Casting Yard PM"]
-        #     columns = ['Contractor Name', 'Types of Labour', 'Skilled', 'Unskilled' ]
-        #     worksheet.column_dimensions['A'].width = len(columns[0])
-        #     worksheet.column_dimensions['B'].width = len(columns[1])
-
-        #     worksheet['A1'] = 'Contractor Name'
-        #     worksheet['B1'] = 'Types of Labour'
-        #     cureent_cell=worksheet.cell(row=1,column=ord('A')-64)
-        #     cureent_cell.alignment = Alignment(horizontal='center', vertical='center')
-        #     cureent_cell=worksheet.cell(row=1,column=ord('B')-64)
-        #     cureent_cell.alignment = Alignment(horizontal='center', vertical='center')
-        #     col="C"
-        #     col_num=3
-        #     for i in area:
-        #         worksheet.column_dimensions[col].width = len('Unskilled')
-        #         worksheet.column_dimensions[col].width = len('Unskilled')
-        #         worksheet[col+'1']= i+"-SE"
-        #         cureent_cell=worksheet.cell(row=1,column=col_num)
-        #         cureent_cell.alignment = Alignment(horizontal='center')
-        #         worksheet[col+'2']= 'Skilled'
-        #         cureent_cell=worksheet.cell(row=2,column=col_num)
-        #         cureent_cell.alignment = Alignment(horizontal='center')
-        #         if col=='Z':
-        #             col='AA'
-        #             col_num=ord(col[1])-64+26
-        #         elif len(col)==1:
-        #             col=chr(ord(col)+1)
-        #             col_num=ord(col)-64
-        #         else:
-        #             col=col[0]+chr(ord(col[1])+1)
-        #             col_num=ord(col[1])-64+26
-        #         worksheet[col+'2']= 'Unskilled'
-                
-        #         cureent_cell=worksheet.cell(row=2,column=col_num)
-        #         cureent_cell.alignment = Alignment(horizontal='center')
-        #         worksheet.column_dimensions[col].width = len('Unskilled')
-        #         if col=='Z':
-        #             col='AA'
-        #             col_num=ord(col[1])-64+26
-        #         elif len(col)==1:
-        #             col=chr(ord(col)+1)
-        #             col_num=ord(col)-64
-        #         else:
-        #             col=col[0]+chr(ord(col[1])+1)
-        #             col_num=ord(col[1])-64+26
-
-        #         worksheet.column_dimensions[col].width = len('Unskilled')
-        #         worksheet[col+'1']= i+"-SLI"
-        #         cureent_cell=worksheet.cell(row=1,column=col_num)
-        #         cureent_cell.alignment = Alignment(horizontal='center')
-        #         worksheet[col+'2']= 'Skilled'
-        #         cureent_cell=worksheet.cell(row=2,column=col_num)
-        #         cureent_cell.alignment = Alignment(horizontal='center')
-        #         if col=='Z':
-        #             col='AA'
-        #             col_num=ord(col[1])-64+26
-        #         elif len(col)==1:
-        #             col=chr(ord(col)+1)
-        #             col_num=ord(col)-64
-        #         else:
-        #             col=col[0]+chr(ord(col[1])+1)
-        #             col_num=ord(col[1])-64+26
-        #         worksheet[col+'2']= 'Unskilled'
-        #         if col=='Z':
-        #             col='AA'
-        #             col_num=ord(col[1])-64+26
-        #         elif len(col)==1:
-        #             col=chr(ord(col)+1)
-        #             col_num=ord(col)-64
-        #         else:
-        #             col=col[0]+chr(ord(col[1])+1)
-        #             col_num=ord(col[1])-64+26
-        #         cureent_cell=worksheet.cell(row=2,column=col_num)
-        #         cureent_cell.alignment = Alignment(horizontal='center')
-            
-        #     cureent_cell=worksheet.cell(row=1,column=47)
-        #     cureent_cell.alignment = Alignment(horizontal='center', vertical='center')
-        #     cureent_cell=worksheet.cell(row=1,column=48)
-        #     cureent_cell.alignment = Alignment(horizontal='center', vertical='center')
-        #     cureent_cell=worksheet.cell(row=2,column=49)
-        #     cureent_cell.alignment = Alignment(horizontal='center')
-        #     cureent_cell=worksheet.cell(row=1,column=49)
-        #     cureent_cell.alignment = Alignment(horizontal='center')
-        #     cureent_cell=worksheet.cell(row=1,column=50)
-        #     cureent_cell.alignment = Alignment(horizontal='center')
-        #     cureent_cell=worksheet.cell(row=1,column=51)
-        #     cureent_cell.alignment = Alignment(horizontal='center', vertical='center')
-            
-        #     worksheet['AU1']= 'Total-SE'
-        #     worksheet['AV1']= 'Total-SLI'
-        #     worksheet['AW1']= 'CLI'
-        #     worksheet['AW2']= 'Skilled'
-        #     worksheet['AX2']= 'Unskilled'
-        #     worksheet['AY1']= 'Total'
-        #     worksheet.merge_cells('A1:A2')
-        #     worksheet.merge_cells('B1:B2')
-        #     worksheet.merge_cells('C1:D1')
-        #     worksheet.merge_cells('E1:F1')
-        #     worksheet.merge_cells('G1:H1')
-        #     worksheet.merge_cells('I1:J1')
-        #     worksheet.merge_cells('K1:L1')
-        #     worksheet.merge_cells('M1:N1')
-        #     worksheet.merge_cells('O1:P1')
-        #     worksheet.merge_cells('Q1:R1')
-        #     worksheet.merge_cells('S1:T1')
-        #     worksheet.merge_cells('U1:V1')
-        #     worksheet.merge_cells('W1:X1')
-        #     worksheet.merge_cells('Y1:Z1')
-        #     worksheet.merge_cells('AA1:AB1')
-        #     worksheet.merge_cells('AC1:AD1')
-        #     worksheet.merge_cells('AE1:AF1')
-        #     worksheet.merge_cells('AG1:AH1')
-        #     worksheet.merge_cells('AI1:AJ1')
-        #     worksheet.merge_cells('AK1:AL1')
-        #     worksheet.merge_cells('AM1:AN1')
-        #     worksheet.merge_cells('AO1:AP1')
-        #     worksheet.merge_cells('AQ1:AR1')
-        #     worksheet.merge_cells('AS1:AT1')
-        #     worksheet.merge_cells('AU1:AU2')
-        #     worksheet.merge_cells('AV1:AV2')
-        #     worksheet.merge_cells('AW1:AX1')
-        #     worksheet.merge_cells('AY1:AY2')
-        #     for cell in worksheet["1:1"]:
-        #         cell.font = Font(bold=True)
-        #     for cell in worksheet["2:2"]:
-        #         cell.font = Font(bold=True)
-        #     row_num=3
-        #     Cont=[]
-        #     Lab=[]
-        #     for i in area:
-        #         area_id=Area.objects.filter(AreaName=i)
-        #         if area_id:
-        #             area_id=area_id[0].id
-        #             if shift=='Day':
-        #                 rows_SE = SiteEngDay.objects.filter(Areaname=area_id,created_at__range=[d1,d2]).values_list('ContractorName', 'LabourCategory', 'NoLabor', 'NoHelp')
-        #                 rows_CLI =CLIDay.objects.filter(created_at__range=[d1,d2]).values_list('ContractorName', 'LabourCategory', 'NoLabor', 'NoHelp')
-        #                 rows_SLI=SLIDay.objects.filter(Areaname=area_id,created_at__range=[d1,d2]).values_list('ContractorName', 'LabourCategory', 'NoLabor', 'NoHelp')
-        #             elif shift=='Night':
-        #                 rows_SE = SiteEngNight.objects.filter(Areaname=area_id,created_at__range=[d1,d2]).values_list('ContractorName', 'LabourCategory', 'NoLabor', 'NoHelp')
-        #                 rows_CLI =CLINight.objects.filter(created_at__range=[d1,d2]).values_list('ContractorName', 'LabourCategory', 'NoLabor', 'NoHelp')
-        #                 rows_SLI=SLINight.objects.filter(Areaname=area_id,created_at__range=[d1,d2]).values_list('ContractorName', 'LabourCategory', 'NoLabor', 'NoHelp')
-                    
-        #             row_SE=list(rows_SE)
-        #             for row in row_SE:
-        #                 ContractorName = ContractorDetail.objects.filter(pk=row[0]).values_list('ContractorName')
-        #                 ContName=list(ContractorName[0])    
-        #                 LabourCategory = LabourOfContractor.objects.filter(pk=row[1]).values_list('LabourCategory')
-        #                 LabourCategory =list(LabourCategory[0])
-        #                 LabourCategory = AddLabour.objects.filter(pk=LabourCategory[0]).values_list('LabourCategory')
-        #                 LabourCategory =list(LabourCategory[0])
-        #                 if (ContName[0] in Cont) and (LabourCategory[0] in Lab) and (Cont.index(ContName[0]) == Lab.index(LabourCategory[0])):
-        #                     index=Cont.index(ContName[0])
-        #                     ind=area.index(i)
-        #                     if ind<6:
-        #                         # print(ContName[0],chr(ord('C')+ind*4),str(3+int(index)))
-        #                         worksheet[chr(ord('C')+ind*4)+str(3+int(index))]=row[2]
-        #                         worksheet[chr(ord('C')+ind*4+1)+str(3+int(index))]=row[3]
-        #                     else:
-        #                         worksheet["A"+chr(ord('C')+ind*4-26)+str(3+int(index))]=row[2]
-        #                         worksheet["A"+chr(ord('C')+ind*4+1-26)+str(3+int(index))]=row[3]
-        #                 else:
-        #                     Cont.append(ContName[0])
-        #                     worksheet['A'+str(row_num)]=ContName[0]
-        #                     Lab.append(LabourCategory[0])
-        #                     worksheet['B'+str(row_num)]=LabourCategory[0]
-        #                     ind=area.index(i)
-        #                     if ind<6:
-        #                         worksheet[chr(ord('C')+ind*4)+str(row_num)]=row[2]
-        #                         worksheet[chr(ord('C')+ind*4+1)+str(row_num)]=row[3]
-        #                         worksheet["AU"+str(row_num)]= "=SUM(C"+str(row_num)+"+D"+str(row_num)+"+G"+str(row_num)+"+H"+str(row_num)+"+K"+str(row_num)+"+L"+str(row_num)+"+O"+str(row_num)+"+P"+str(row_num)+"+S"+str(row_num)+"+T"+str(row_num)+"+W"+str(row_num)+"+X"+str(row_num)+"+AA"+str(row_num)+"+AB"+str(row_num)+"+AE"+str(row_num)+"+AF"+str(row_num)+"+AI"+str(row_num)+"+AJ"+str(row_num)+"+AM"+str(row_num)+"+AN"+str(row_num)+"+AQ"+str(row_num)+"+AR"+str(row_num)+")"
-        #                     else:
-        #                         worksheet["A"+chr(ord('C')+ind*4-26)+str(3+int(index))]=row[2]
-        #                         worksheet["A"+chr(ord('C')+ind*4+1-26)+str(3+int(index))]=row[3]
-        #                         worksheet["AU"+str(row_num)]= "=SUM(C"+str(row_num)+"+D"+str(row_num)+"+G"+str(row_num)+"+H"+str(row_num)+"+K"+str(row_num)+"+L"+str(row_num)+"+O"+str(row_num)+"+P"+str(row_num)+"+S"+str(row_num)+"+T"+str(row_num)+"+W"+str(row_num)+"+X"+str(row_num)+"+AA"+str(row_num)+"+AB"+str(row_num)+"+AE"+str(row_num)+"+AF"+str(row_num)+"+AI"+str(row_num)+"+AJ"+str(row_num)+"+AM"+str(row_num)+"+AN"+str(row_num)+"+AQ"+str(row_num)+"+AR"+str(row_num)+")"
-        #                     row_num+=1
-        #             for row in rows_SLI:
-        #                 ContractorName = ContractorDetail.objects.filter(pk=row[0]).values_list('ContractorName')
-        #                 ContName=list(ContractorName[0])    
-        #                 LabourCategory = LabourOfContractor.objects.filter(pk=row[1]).values_list('LabourCategory')
-        #                 LabourCategory =list(LabourCategory[0])
-        #                 LabourCategory = AddLabour.objects.filter(pk=LabourCategory[0]).values_list('LabourCategory')
-        #                 LabourCategory =list(LabourCategory[0])
-        #                 if (ContName[0] in Cont) and (LabourCategory[0] in Lab) and (Cont.index(ContName[0]) == Lab.index(LabourCategory[0])):
-        #                     index=Cont.index(ContName[0])
-        #                     ind=area.index(i)
-        #                     if ind<6:
-        #                         # print("SLI-",ContName[0],chr(ord('E')+ind*4),str(3+int(index)))
-        #                         worksheet[chr(ord('E')+ind*4)+str(3+int(index))]=row[2]
-        #                         worksheet[chr(ord('E')+ind*4+1)+str(3+int(index))]=row[3]
-        #                     else:
-        #                         # print("SLI-",ContName[0],"A"+chr(ord('E')+ind*4-26),str(3+int(index)))
-        #                         worksheet["A"+chr(ord('E')+ind*4-26)+str(3+int(index))]=row[2]
-        #                         worksheet["A"+chr(ord('E')+ind*4+1-26)+str(3+int(index))]=row[3]
-        #                 else:
-        #                     Cont.append(ContName[0])
-        #                     worksheet['A'+str(row_num)]=ContName[0]
-        #                     Lab.append(LabourCategory[0])
-        #                     worksheet['B'+str(row_num)]=LabourCategory[0]
-        #                     ind=area.index(i)
-        #                     if ind<6:
-        #                         worksheet[chr(ord('E')+ind*4)+str(row_num)]=row[2]
-        #                         worksheet[chr(ord('E')+ind*4+1)+str(row_num)]=row[3]
-        #                         worksheet["AV"+str(row_num)]= "=SUM(E"+str(row_num)+"+F"+str(row_num)+"+I"+str(row_num)+"+J"+str(row_num)+"+M"+str(row_num)+"+N"+str(row_num)+"+Q"+str(row_num)+"+Q"+str(row_num)+"+R"+str(row_num)+"+U"+str(row_num)+"+V"+str(row_num)+"+Y"+str(row_num)+"+Z"+str(row_num)+"+AC"+str(row_num)+"+AD"+str(row_num)+"+AG"+str(row_num)+"+AH"+str(row_num)+"+AK"+str(row_num)+"+AL"+str(row_num)+"+AO"+str(row_num)+"+AP"+str(row_num)+"+AS"+str(row_num)+"+AT"+str(row_num)+")"
-        #                     else:
-        #                         worksheet["A"+chr(ord('E')+ind*4-26)+str(3+int(index))]=row[2]
-        #                         worksheet["A"+chr(ord('E')+ind*4+1-26)+str(3+int(index))]=row[3]
-        #                         worksheet["AV"+str(row_num)]= "=SUM(E"+str(row_num)+"+F"+str(row_num)+"+I"+str(row_num)+"+J"+str(row_num)+"+M"+str(row_num)+"+N"+str(row_num)+"+Q"+str(row_num)+"+Q"+str(row_num)+"+R"+str(row_num)+"+U"+str(row_num)+"+V"+str(row_num)+"+Y"+str(row_num)+"+Z"+str(row_num)+"+AC"+str(row_num)+"+AD"+str(row_num)+"+AG"+str(row_num)+"+AH"+str(row_num)+"+AK"+str(row_num)+"+AL"+str(row_num)+"+AO"+str(row_num)+"+AP"+str(row_num)+"+AS"+str(row_num)+"+AT"+str(row_num)+")"
-        #                     row_num+=1
-        #             for row in rows_CLI:
-        #                 ContractorName = ContractorDetail.objects.filter(pk=row[0]).values_list('ContractorName')
-        #                 ContName=list(ContractorName[0])    
-        #                 LabourCategory = LabourOfContractor.objects.filter(pk=row[1]).values_list('LabourCategory')
-        #                 LabourCategory =list(LabourCategory[0])
-        #                 LabourCategory = AddLabour.objects.filter(pk=LabourCategory[0]).values_list('LabourCategory')
-        #                 LabourCategory =list(LabourCategory[0])
-        #                 if (ContName[0] in Cont) and (LabourCategory[0] in Lab) and (Cont.index(ContName[0]) == Lab.index(LabourCategory[0])):
-        #                     index=Cont.index(ContName[0])
-        #                     ind=area.index(i)
-        #                     # print("SLI-",ContName[0],"A"+chr(ord('E')+ind*4-26),str(3+int(index)))
-        #                     worksheet["AW"+str(3+int(index))]=row[2]
-        #                     worksheet["AX"+str(3+int(index))]=row[3]
-        #                 else:
-        #                     Cont.append(ContName[0])
-        #                     worksheet['A'+str(row_num)]=ContName[0]
-        #                     Lab.append(LabourCategory[0])
-        #                     worksheet['B'+str(row_num)]=LabourCategory[0]
-        #                     worksheet["AW"+str(row_num)]=row[2]
-        #                     worksheet["AX"+str(row_num)]=row[3]
-        #                     worksheet["AY"+str(row_num)]= "=SUM(AW"+str(row_num)+"+AX"+str(row_num)+")"
-        #                     row_num+=1
-        # #freezing the first row
-        # worksheet.freeze_panes = 'C3'
 
         workbook.save(response)
         # return response

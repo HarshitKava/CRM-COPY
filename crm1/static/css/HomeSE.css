@@ -6,6 +6,10 @@ body
     background-size: 40%;
     height: 844px;
 }
+a,a:hover{
+    text-decoration: none;
+    color: white;
+}
 .namebar{
     overflow: hidden;
     position: fixed;
@@ -132,6 +136,30 @@ body
     background: #a8a8a8;
     text-decoration: none;
 }
+.dlr{
+  display: block;
+    background: #a8a8a8;
+    padding: 6% 5% 6% 5%;
+    font-size: 195%;
+    text-align: center;
+    color: white;
+    font-weight: bold;
+    line-height: 25px;
+
+    position: absolute;
+    top: 83%;
+    left: 20%;
+    -webkit-border-radius: 4;
+    -moz-border-radius: 4;
+    border-radius: 4px;
+    -webkit-box-shadow: 6px 6px 15px #bfbbbf;
+    -moz-box-shadow: 6px 6px 15px #bfbbbf;
+    box-shadow: 6px 6px 15px #bfbbbf;
+    font-family: Arial;
+    color: #ffffff;
+    background: #a8a8a8;
+    text-decoration: none;
+}
 .showbtn:hover, .showbtn:active{
     background: #575457;
     text-decoration: none;
@@ -170,13 +198,13 @@ body
   color: white;
 }
 
-.addbtn, .viewbtn, .viewnightbtn, .showbtn{
+.addbtn, .viewbtn, .viewnightbtn, .showbtn, .dlr{
   color: #ffffff;
   background-color: #015099;
   animation: zoomout 0.7s forwards ;
 
 }
-.addbtn:hover, .viewbtn:hover, .viewnightbtn:hover, .showbtn:hover{
+.addbtn:hover, .viewbtn:hover, .viewnightbtn:hover, .showbtn:hover, .dlr:hover{
 animation: zoomin 0.7s forwards ;
 }
 @keyframes zoomin {
@@ -203,6 +231,13 @@ animation: zoomin 0.7s forwards ;
 }
 /* Media screen for desktop */
 @media screen and (min-width: 800px) {
+  a{
+    text-decoration: none;
+  }
+  a:hover{
+    text-decoration: none;
+    color: #fff;
+  }
   body
   {
       background-image: url(https://www.urcindia.com/img/new_logo.svg);
@@ -330,6 +365,30 @@ animation: zoomin 0.7s forwards ;
       background: #a8a8a8;
       text-decoration: none;
   }
+  .dlr{
+      display: block;
+      background: #a8a8a8;
+      padding: 2% 1% 2% 1%;
+      font-size: 160%;
+      text-align: center;
+      color: white;
+      font-weight: bold;
+      line-height: 25px;
+
+      position: absolute;
+      top: 69.2%;
+      left: 44%;
+      -webkit-border-radius: 4;
+      -moz-border-radius: 4;
+      border-radius: 4px;
+      -webkit-box-shadow: 6px 6px 15px #bfbbbf;
+      -moz-box-shadow: 6px 6px 15px #bfbbbf;
+      box-shadow: 6px 6px 15px #bfbbbf;
+      font-family: Arial;
+      color: #ffffff;
+      background: #a8a8a8;
+      text-decoration: none;
+  }
   .viewnightbtn{
     display: block;
     background: #a8a8a8;
@@ -360,13 +419,14 @@ animation: zoomin 0.7s forwards ;
     
   }
 
-  .addbtn, .viewbtn, .viewnightbtn, .showbtn{
+  .addbtn, .viewbtn, .viewnightbtn, .showbtn, .dlr{
       color: #ffffff;
       background-color: #015099;
       animation: zoomout 0.7s forwards ;
+      text-decoration: none;
 
 }
-.addbtn:hover, .viewbtn:hover, .viewnightbtn:hover, .showbtn:hover{
+.addbtn:hover, .viewbtn:hover, .viewnightbtn:hover, .showbtn:hover, .dlr:hover{
   animation: zoomin 0.7s forwards ;
 }
 @keyframes zoomin {

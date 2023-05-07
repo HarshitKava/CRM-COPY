@@ -22,23 +22,26 @@ def HomeAdminProRepo(request):
 @allowed_users(allowed_roles=['Admin'])
 def Activity(request):
     Form=CategoryOfDeploymentForm()
+    data = CategoryOfDeployment.objects.all()
     if request.method=='POST':
         Form=CategoryOfDeploymentForm(request.POST)
         if Form.is_valid():
             Form.save()
             return redirect('AddActivity')
-    return render(request,'ProductivityReport/Admin/Activity.html',{'Form':Form})
+    return render(request,'ProductivityReport/Admin/Activity.html',{'Form':Form,'data':data})
 
 @login_required(login_url='Login')
 @allowed_users(allowed_roles=['Admin'])
 def AddStructure(request):
     Form=StructureForm()
+    data = Structure.objects.all()
     if request.method=='POST':
         Form=StructureForm(request.POST)
         if Form.is_valid():
             Form.save()
-            return redirect('AddStructure')
-    return render(request,'ProductivityReport/Admin/Structure.html',{'Form':Form})
+            return redirect('ShowStructure')
+    return render(request,'ProductivityReport/Admin/Structure.html',{'Form':Form,'data':data})
+
 
 @login_required(login_url='Login')
 @allowed_users(allowed_roles=['Site Engineer'])

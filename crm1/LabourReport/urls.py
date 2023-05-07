@@ -7,19 +7,27 @@ urlpatterns = [
     path('Navbar/',views.Navbar,name="Navbar" ),
 
     #password reset
-    path('reset_password/', auth_views.PasswordResetView.as_view(), name="reset_password"),#template_name="LabourReport/password_reset.html"
+    path('reset_password/', auth_views.PasswordResetView.as_view(template_name="LabourReport/Reset_Password.html"), name="reset_password"),#template_name="LabourReport/password_reset.html"
     path('reset_password_sent/', auth_views.PasswordResetDoneView.as_view(), name="password_reset_done"),#template_name="LabourReport/password_reset_sent.html"
     path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(), name="password_reset_confirm"),#template_name="LabourReport/password_reset_form.html"
     path('reset_password_complete/', auth_views.PasswordResetCompleteView.as_view(), name="password_reset_complete"),#template_name="LabourReport/password_reset_done.html"
 
     path('Admin/', views.HomeAdmin,name="HomeAdmin"),
     path('AddUser/', views.AddUser,name="AddUser"),
+    path('EditUser/<i>/', views.EditUser,name="EditUser"),
+    path('DeleteUser/<i>/', views.DeleteUser,name="DeleteUser"),
     path('AddContractor/', views.AddContractor,name="AddContractor"),
+    path('EditContractor/<i>/', views.EditContractor,name="EditContractor"),
+    path('DeleteContractor/<i>/', views.DeleteContractor,name="DeleteContractor"),
+    path('ShowStructure/', views.ShowStructure,name="ShowStructure"),
+    path('EditStructure/<i>/', views.EditStructure,name="EditStructure"),
+    path('DeleteStructure/<i>/', views.DeleteStructure,name="DeleteStructure"),
     path('AddLabours/', views.AddLabours,name="AddLabours"),
     path('LabourOfContractor/', views.LaboursOfContractor,name="LabourOfContractor"),
     path('ResetPassword/', views.ResetPassword,name="ResetPassword"),
     path('ajax-load-Labour/', views.load_labour,name="ajax_load_labour"),
     path('ajax-load-cat/', views.load_cat,name="ajax_load_cat"),
+    path('Contractor/', views.ShowContractor,name="Contractor"),
 
     path('SE/', views.HomeSE,name="HomeSE"),
     path('AddDaySE/', views.AddDaySE,name="AddDaySE"),
@@ -28,6 +36,7 @@ urlpatterns = [
     path('AddNightSE/', views.AddNightSE,name="AddNightSE"),
     path('ViewNightSE/', views.ViewNightSE,name="ViewNightSE"),
     path('DeleteNightSE/<str:i>', views.DeleteNightSE,name="DeleteNightSE"),
+    path('DLRSummary/', views.DLRSummary,name="DLRSummary"),
     
     path('HomeSLI/', views.HomeSLI,name="HomeSLI"),
     path('AddDaySLI/', views.AddDaySLI,name="AddDaySLI"),

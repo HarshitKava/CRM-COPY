@@ -2,12 +2,20 @@
 {% load static %}
 {% block css %}
 <link rel="stylesheet" href="{% static '/css/Admin/User.css'%}">
+<style>
+    body{
+        background-position: 52% 15%;
+
+    }
+</style>
 {% endblock %}
 {% block content %}
 <center>
   <div >
-<form action="" method="post">
+<form style="left:0%;" action="" method="post">
   {% csrf_token %}
+
+  
   <div class="input-container">
     {{form1.username}}
     <label>User Name</label>
@@ -32,22 +40,6 @@
 <input type="submit" class="submitbtn" value="Add User" >
 
 </form>
-</div>
-<div id="data">
-  <table>
-    <tr style="position: sticky; width:100%;top:0%;background-color: rgb(236, 255, 255);">
-      <th>User Name</th>
-      <th>Email-Id</th>
-      <th>Role</th>
-    </tr>
-    {% for i in User_data %}
-    <tr>
-      <td>{{i.username}}</td>
-      <td>{{i.email}}</td>
-      <td>{{i.groups.all.0}}</td>
-    </tr>
-    {% endfor %}
-  </table>
 </div>
 </center>
 {% endblock %}
