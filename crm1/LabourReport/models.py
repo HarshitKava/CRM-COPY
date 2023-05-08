@@ -54,7 +54,7 @@ class LabourOfContractor(models.Model):
     LabourCategory=models.ForeignKey('AddLabour', on_delete=models.CASCADE, null=True)
 
     def __str__(self):
-        return str(self.LabourCategory)
+        return str(self.ContractorName)
 
 class CategoryOfDeployment(models.Model):
     ActivityName=models.ForeignKey(AddLabour,on_delete=models.CASCADE,null=True)

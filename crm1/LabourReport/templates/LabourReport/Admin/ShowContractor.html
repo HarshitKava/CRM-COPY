@@ -116,12 +116,12 @@
   <div class="sidebar">
         <img height="13%" src="https://www.urcindia.com/img/new_logo.svg" alt="">
         <br><br>
-        <a href="{% url 'HomeAdmin' %}">User</a>
+        <a href="{% url 'HomeAdmin' %}" >User</a>
         <a href="{% url 'Contractor' %}" class="sidebar-item active">Contractor</a>
         <a href="{% url 'ShowStructure' %}" >Structure</a>
-        <a href="{% url 'AddLabours' %}" >Labour Category</a>
-        <a href="{% url 'LabourOfContractor' %}" >Labour with Contractor</a>
-        <a href="{% url 'AddActivity' %}" >Deployment Category</a>
+        <a href="{% url 'ShowLabours' %}" >Labour Category</a>
+        <a href="{% url 'ShowLabourOfContractor' %}" >Labour with Contractor</a>
+        <a href="{% url 'ShowActivity' %}" >Deployment Category</a>
   </div>
     <a href="{% url 'AddUser' %}" class="addSE">Add User</a>
     <a href="{% url 'AddContractor' %}" class="addCatDeploy">Add Contractor</a>  

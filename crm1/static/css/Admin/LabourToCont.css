@@ -123,6 +123,7 @@ form{
           font-size:16px;
           color:#015099;
           border-radius: 0px;
+          /* text-align: left; */
         }
     .input-container.select select option{
         color: #008837;
@@ -150,7 +151,7 @@ form{
       border-bottom:2px solid #015099;  
       background:transparent;
       padding:8px 0 5px 0;
-      width: 100%;
+      width: 80%;
       font-size:16px;
       color:#015099;
     }

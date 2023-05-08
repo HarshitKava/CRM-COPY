@@ -175,7 +175,8 @@ def DLRSummary(request):
                 # print all data
                 date = str(i.created_at)[:10]
                 date = date[8:10]+"/"+date[5:7]+"/"+date[0:4]
-                df = df.append({'ContractorName':i.ContractorName,'Date':date,'LabourCategory':i.LabourCategory,'CategoryName':i.CategoryName,'NoLabor':i.NoLabor},ignore_index=True)
+                df.loc[len(df)] = {'ContractorName':i.ContractorName,'Date':date,'LabourCategory':i.LabourCategory,'CategoryName':i.CategoryName,'NoLabor':i.NoLabor}
+                # df = df.append({'ContractorName':i.ContractorName,'Date':date,'LabourCategory':i.LabourCategory,'CategoryName':i.CategoryName,'NoLabor':i.NoLabor},ignore_index=True)
             # Get unique ContractorName from df
             cont_name = df['ContractorName'].unique()
             cont_row_span = {}
@@ -198,7 +199,8 @@ def DLRSummary(request):
                 date = str(i.created_at)[:10]
                 date = date[8:10]+"/"+date[5:7]+"/"+date[0:4]
                 print(date)
-                df = df.append({'ContractorName':i.ContractorName,'Date':date,'LabourCategory':i.LabourCategory,'CategoryName':i.CategoryName,'NoLabor':i.NoLabor},ignore_index=True)
+                df.loc[len(df)] = {'ContractorName':i.ContractorName,'Date':date,'LabourCategory':i.LabourCategory,'CategoryName':i.CategoryName,'NoLabor':i.NoLabor}
+                # df = df.append({'ContractorName':i.ContractorName,'Date':date,'LabourCategory':i.LabourCategory,'CategoryName':i.CategoryName,'NoLabor':i.NoLabor},ignore_index=True)
             # Create Workbook and add worksheet
             workbook = Workbook()
             # Get active worksheet/tab
@@ -267,11 +269,11 @@ def HomeAdmin(request):
     # Get Data of users
     User_data=User.objects.all().order_by('username')
     User_data=User.objects.all().order_by('username')
-    df = pd.DataFrame(columns=['username','email','group'])
+    df = pd.DataFrame(columns=['username','email','group','id'])
     for i in User_data:
-        df = df.append({'id':i.id,'username':i.username,'email':i.email,'group':i.groups.all()[0]},ignore_index=True)
+        if i.username != 'harshitkava':
+            df.loc[len(df)] = {'username':i.username,'id':i.id,'email':i.email,'group':i.groups.all()[0]}
 
-    # Get Data of Areas
     Area_data=Area.objects.all().order_by('AreaName')
     # Convert to Dataframe
     df1=pd.DataFrame(Area_data.values())
@@ -280,6 +282,7 @@ def HomeAdmin(request):
     df2 = pd.merge(df,df1,how='left',left_on='username',right_on='Username')
     # drop Username column
     df2 = df2.drop(['Username'],axis=1)
+    # print(df2)
     return render(request,'LabourReport/Admin/HomeAd.html',{'data':df2})
 
 @login_required(login_url='Login')
@@ -313,7 +316,8 @@ def ShowContractor(request):
     data = ContractorDetail.objects.all().order_by('ContractorName')
     df = pd.DataFrame(columns=['ContractorName','ContractorNumber','id'])
     for i in data:
-        df = df.append({'ContractorName':i.ContractorName,'ContractorNumber':i.ContractorNumber,'id':i.id},ignore_index=True)
+        df.loc[len(df)] = {'ContractorName':i.ContractorName,'ContractorNumber':i.ContractorNumber,'id':i.id}
+        # df = df.append({'ContractorName':i.ContractorName,'ContractorNumber':i.ContractorNumber,'id':i.id},ignore_index=True)
     return render(request,'LabourReport/Admin/ShowContractor.html',{'data':df})
 
 @login_required(login_url='Login')
@@ -339,9 +343,10 @@ def DeleteContractor(request,i):
 @allowed_users(allowed_roles=['Admin'])
 def ShowStructure(request):
     data = Structure.objects.all().order_by('StructureName')
-    df = pd.DataFrame(columns=['StructureName','StructureNumber','id'])
+    df = pd.DataFrame(columns=['StructureName','id'])
     for i in data:
-        df = df.append({'StructureName':i.StructureName,'id':i.id},ignore_index=True)
+        df.loc[len(df)] = {'StructureName':i.StructureName,'id':i.id}
+        # df = df.append({'StructureName':i.StructureName,'id':i.id},ignore_index=True)
     return render(request,'LabourReport/Admin/ShowStructure.html',{'data':df})
 
 @login_required(login_url='Login')
@@ -362,6 +367,87 @@ def DeleteStructure(request,i):
     data = Structure.objects.get(pk=i)
     data.delete()
     return redirect('ShowStructure')
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def ShowLabours(request):
+    data = AddLabour.objects.all().order_by('LabourCategory')
+    df = pd.DataFrame(columns=['LabourCategory','id'])
+    for i in data:
+        df.loc[len(df)] = {'LabourCategory':i.LabourCategory,'id':i.id}
+        # df = df.append({'LabourName':i.LabourName,'id':i.id},ignore_index=True)
+    return render(request,'LabourReport/Admin/ShowLabours.html',{'data':df})
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def EditLabours(request,i):
+    i = float(i)
+    data = AddLabour.objects.get(pk=i)
+    form = Add_Labour(request.POST or None,instance=data)
+    if form.is_valid():
+        form.save()
+        return redirect('ShowLabours')
+    return render(request,'LabourReport/Admin/EditLabours.html',{'form':form})
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def DeleteLabours(request,i):
+    i = float(i)
+    data = AddLabour.objects.get(pk=i)
+    data.delete()
+    return redirect('ShowLabours')
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def ShowLabourOfContractor(request):
+    data = LabourOfContractor.objects.all()
+    df = pd.DataFrame(columns=['ContractorName','LabourCategory','id'])
+    for i in data:
+        df.loc[len(df)] = {'ContractorName':str(i.ContractorName),'LabourCategory':i.LabourCategory,'id':i.id}
+        # df = df.append({'ContractorName':i.ContractorName,'id':i.id},ignore_index=True)
+    df = df.sort_values(by='ContractorName')
+    # print(df.sort_values(by='ContractorName',ascending=True))
+    return render(request,'LabourReport/Admin/ShowLabourOfContractor.html',{'data':df})
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def EditLabourOfContractor(request,i):
+    i = float(i)
+    data = LabourOfContractor.objects.get(pk=i)
+    form = Add_Lab_To_Contractor(request.POST or None,instance=data)
+    if form.is_valid():
+        form.save()
+        return redirect('ShowLabourOfContractor')
+    return render(request,'LabourReport/Admin/EditLabourOfContractor.html',{'form':form})
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def DeleteLabourOfContractor(request,i):
+    i = float(i)
+    data = LabourOfContractor.objects.get(pk=i)
+    data.delete()
+    return redirect('ShowLabourOfContractor')
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def ShowActivity(request):
+    data = CategoryOfDeployment.objects.all().order_by('ActivityName')
+    df = pd.DataFrame(columns=['CategoryName','ActivityName','id'])
+    for i in data:
+        df.loc[len(df)] = {'CategoryName':i.CategoryName,'ActivityName':i.ActivityName,'id':i.id}
+        # df = df.append({'ActivityName':i.ActivityName,'id':i.id},ignore_index=True)
+    return render(request,'LabourReport/Admin/ShowActivity.html',{'data':df})
+
+@login_required(login_url='Login')
+@allowed_users(allowed_roles=['Admin'])
+def EditActivity(request,i):
+    i = float(i)
+    data = CategoryOfDeployment.objects.get(pk=i)
+    form = CategoryOfDeploymentForm(request.POST or None,instance=data)
+    if form.is_valid():
+        form.save()
+        return redirect('ShowActivity')
+    return render(request,'LabourReport/Admin/EditActivity.html',{'Form':form})
 
 @login_required(login_url='Login')
 @allowed_users(allowed_roles=['Admin'])
@@ -423,7 +509,7 @@ def AddLabours(request):
         form=Add_Labour(request.POST)
         if form.is_valid():
             form.save()
-            return render(request,'LabourReport/Admin/Labour.html',{'form':form,'labour_data':labour_data})
+            return redirect('ShowLabours')
     
     return render(request,'LabourReport/Admin/Labour.html',{'form':form,'labour_data':labour_data})
 
@@ -726,7 +812,6 @@ def SiteReport(request):
         date = request.POST.get('date')
         date1=datetime.strptime(date, "%Y-%m-%d")
         tomorrow = date1 + timedelta(1)
-        date1 = date1 - timedelta(1)
         d1=date1.strftime("%Y-%m-%d")
         d2=tomorrow.strftime("%Y-%m-%d")
         print("d",d1,d2)
@@ -778,7 +863,6 @@ def SiteReport(request):
             id_list = []
             for i in area_id:
                 id_list.append(i.id)
-
             if shift == 'Day':
                 rows = SiteEngDay.objects.filter(Areaname__in=id_list,created_at__range=[d1,d2]).values_list('LabourCategory', 'NoLabor')
             elif shift == 'Night':

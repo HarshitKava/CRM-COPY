@@ -91,7 +91,7 @@
             font-size: 100%;
             border:0px;
             overflow-y:auto;
-            height: 98%;
+            height: 97%;
             width: 97%;
             color: #008837;
             background-color: transparent;
@@ -118,10 +118,10 @@
         <br><br>
         <a href="{% url 'HomeAdmin' %}" >User</a>
         <a href="{% url 'Contractor' %}" >Contractor</a>
-        <a href="{% url 'ShowStructure' %}" class="sidebar-item active">Structure</a>
+        <a href="{% url 'ShowStructure' %}" >Structure</a>
         <a href="{% url 'ShowLabours' %}" >Labour Category</a>
         <a href="{% url 'ShowLabourOfContractor' %}" >Labour with Contractor</a>
-        <a href="{% url 'ShowActivity' %}" >Deployment Category</a>
+        <a href="{% url 'ShowActivity' %}" class="sidebar-item active" >Deployment Category</a>
   </div>
     <a href="{% url 'AddUser' %}" class="addSE">Add User</a>
     <a href="{% url 'AddContractor' %}" class="addCatDeploy">Add Contractor</a>  
@@ -133,13 +133,15 @@
       <div id="data">
         <table>
           <tr style="position: sticky; width:100%;top:0%;background-color: rgb(236, 255, 255);">
-            <th>Structure Name</th>
+            <th>Labour Category</th>
+            <th>Deployment Category</th>
             <th>Action</th>
           </tr>
           {% for i in data.itertuples %}
           <tr>
-            <td>{{i.StructureName}}</td>
-            <td><a href="{% url 'EditStructure' i.id %}">Edit</a> | <a onclick="Delete()" href="{% url 'DeleteStructure' i.id %}">Delete</a></td>
+            <td>{{i.ActivityName}}</td>
+            <td>{{i.CategoryName}}</td>
+            <td><a href="{% url 'EditActivity' i.id %}">Edit</a> | <a onclick="Delete()" href="{% url 'DeleteUser' i.id %}">Delete</a></td>
           </tr>
           {% endfor %}
         </table>
@@ -162,5 +164,6 @@
       event.preventDefault();
     }
   }
+
 </script>
 {% endblock %}
